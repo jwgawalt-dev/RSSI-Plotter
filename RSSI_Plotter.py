@@ -1,6 +1,5 @@
 #program to plot tag RSSI values
 
-import csv
 import tkinter 
 from tkinter import filedialog
 import matplotlib.pyplot as plt
@@ -22,8 +21,10 @@ def parse_RFID_data(path):
                 rssi = float(elements[1])
                 antenna = elements[2]
                 timestamp = elements[5]
+                #clear carriage return and line feed characters
                 timestamp = timestamp[:-2]
-                timestamp = timestamp.split()
+                timestamp = timestamp.split()[0]
+                #timestamp = timestamp.split('.')[0]
 
                 #create dict for each line in csv file 
                 line_data = {
@@ -46,12 +47,11 @@ def create_XY_table (read_event_list,epc_list):
     x_values = []
     #create empty list to contain all sets of RSSI data
     y_values = [] 
-    #temp array to store individual instances of timestamp daa
-    temp_x_values=[]
-    #temp array to store individual instances of RSSI data
-    temp_y_values = []
-    j=0
+    
+    
+    #how many tags were read?
     num_epcs = len(epc_list)
+
     #iterate through EPC list and add placeholder for x/y values corresponding to each EPC
     for j in range(0,num_epcs):
         x_values.append([])
@@ -63,31 +63,53 @@ def create_XY_table (read_event_list,epc_list):
         for epc in epc_list:
             if element['epc'] == epc:
                 y_values[k].append(element['rssi'])
-                x_values[k].append(element['timestamp'][0])
+                x_values[k].append(element['timestamp'])
             k+=1
     return x_values,y_values
 
-#Prompt User to select csv file export
+def count_tag_reads(epc_list,read_event_list):
+    tag_read_counts=[]
+    for i in range(0,len(epc_list)):
+        tag_read_counts.append([0])
+    
+    for event in read_events:
+        j=0
+        for epc in epc_list:            
+            if event['epc']==epc:
+               
+                tag_read_counts[j][0]+=1
+            j+=1    
+    return tag_read_counts
 
+#Prompt User to select csv file export
 path = filedialog.askopenfilename(title = ("SELECT EXPORT FILE"),filetypes=(("UHF Tag Trace Export File", "*.csv"),("all files", "*.*")) )
 
+#Debug Path
+#path =r'C:/Users/JGawal/Downloads/EPC_data_20230308 (4).csv'
+
 #initialize arrays
-read_event_list = []
+read_events = []
 epc_list = []
 x_value_set =[]
 y_value_set =[]
 
 #extract read event from export file
-read_event_list,epc_list = parse_RFID_data((path))
+read_events,epc_list = parse_RFID_data((path))
 #create x/y data sets (timestamp = x, rssi = y)
-x_value_set, y_value_set = create_XY_table(read_event_list, epc_list)
+x_value_set, y_value_set = create_XY_table(read_events, epc_list)
+tag_counts = count_tag_reads(epc_list,read_events)
+
 
 #plot each data set
 i=0
 for i in range(0,len(x_value_set)):
-    plt.plot(x_value_set[i],y_value_set[i])
-plt.xticks( rotation='vertical')
-plt.xlabel('Time')
-plt.ylabel("RSSI")
+    plt.plot(x_value_set[i],y_value_set[i],marker ='.',label = "EPC:"+epc_list[i]+" " + str(tag_counts[i][0])+" Reads",alpha = 1)
+
+#configure plot
+plt.xticks( rotation=45)
+plt.xlabel('Time of Read Event')
+plt.ylabel("RSSI (dBm)")
+plt.legend(loc='best')
+plt.grid(axis= 'y')
 plt.show()
 
