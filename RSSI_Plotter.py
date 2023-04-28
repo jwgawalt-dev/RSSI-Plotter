@@ -1,14 +1,12 @@
 #program to plot tag RSSI values
-#add feature to select tags to plot
-#add feature to choose superimposed graph
-#calculate time based on start of test
-
+#may need to update to split read events out by antenna
 
 import tkinter as tk
 from tkinter import filedialog
 import matplotlib.pyplot as plt
 
 def time_to_float(timestamp):
+    #take timestamp in format HH:MM:SS.MS, convert to integer value in seconds
     elements = timestamp.split(':')
     hours = float(elements[0])
     minutes = float(elements[1])
@@ -18,10 +16,11 @@ def time_to_float(timestamp):
     return time
 
 def parse_RFID_data(path):
+    #extract epc, rssi, antenna, and timestamp for each read event in the tag trace export file 
     i=0
-    epc_list=[]
-    read_events = {}
-    read_event_list = []
+    epc_list=[] #list of unique EPCs in export  file
+    read_events = {} #dict to store epc, rssi, antenna, and timestamp for each read event
+    read_event_list = [] #list of read event dicts 
     with open(path,'r',newline='') as csvfile:
 
         for read_event in csvfile:     
@@ -29,16 +28,14 @@ def parse_RFID_data(path):
             #add each dict to a list of dictionaries with line data
             if i > 1:
                 #separate csv line into a list of values, strip extra characters from timestamp entry
-                elements = read_event.split(';')
+                elements = read_event.split(';') 
                 epc = elements[0]
-                rssi = float(elements[1])
+                rssi = float(elements[1]) #convert string to floating point value for RSSI
                 antenna = elements[2]
-                timestamp = elements[5]
-                #clear carriage return and line feed characters
-                timestamp = timestamp[:-2]
-                timestamp = timestamp.split()[0]
 
-                
+                timestamp = elements[5]                
+                timestamp = timestamp[:-2] #remove carriage return and line feed characters
+                timestamp = timestamp.split()[0]                
                 timestamp = time_to_float(timestamp)
 
                 #Grab first timestamp value, set as start time.
@@ -48,7 +45,7 @@ def parse_RFID_data(path):
                 elif i>2:
                     timestamp = timestamp - start_time
 
-                #timestamp = timestamp.split('.')[0]
+                
 
                 #create dict for each line in csv file 
                 line_data = {
@@ -69,8 +66,7 @@ def generate_RSSI_vs_Time_dataset (read_event_list,epc_list):
     #Create empty list to contain all sets of timestamp data
     x_values = []
     #create empty list to contain all sets of RSSI data
-    y_values = [] 
-    
+    y_values = []     
     
     #how many tags were read?
     num_epcs = len(epc_list)
@@ -109,8 +105,6 @@ def count_tag_read_events(epc_list,read_event_list):
 path = filedialog.askopenfilename(title = ("SELECT EXPORT FILE"),
                                   filetypes=(("UHF Tag Trace Export File", "*.csv"),("all files", "*.*")) )
 
-#Debug Path
-#path =r'C:/Users/JGawal/Downloads/EPC_data_20230308 (4).csv'
 
 #initialize arrays
 read_events = []
@@ -122,22 +116,8 @@ y_value_set =[]
 read_events,epc_list = parse_RFID_data((path))
 tag_counts = count_tag_read_events(epc_list,read_events)
 
-#GUI Programming
-
-window = tk.Tk()
-window.configure(bg="#ffcc00")
-window.title('RSSI Plotter')
-window.geometry('')
- 
-Label = tk.Label(window, bg="#ffcc00", 
-             width=20, 
-             text='Select Tags to Plot')
-Label.pack()
- 
-checkboxes = []
-vardict ={}
-selected_epc_list=[]
-plot_data = 0
+###    GUI Programming         ###
+##################################
 def plot_all():
     global selected_epc_list
     global plot_data
@@ -159,19 +139,56 @@ def plot_selected():
         v+=1
     window.destroy()
 
+window = tk.Tk()
+window.configure(bg="#ffcc00") 
+window.title('RSSI Plotter')
+window.geometry('')
+ 
+Label = tk.Label(window, bg="#ffcc00", 
+             width=20, 
+             text='Select Tags to Plot')
+Label.pack()
+Label2 = tk.Label(window, bg="#ffcc00", 
+             width=20, 
+             text='"Tag EPC"  (Read Count)')
+Label2.pack()
+checkboxes = []
+vardict ={}
+selected_epc_list=[]
+plot_data = 0
+
 #create checkboxes for each tag in read event dict
-for c in range(len(epc_list)):
+for c in range(len(epc_list)): 
+    #initialize a new IntVar for each tag in EPC List
     vardict['tag '+str(c)]=tk.IntVar()
-    checkbox = tk.Checkbutton(window,text = str(epc_list[c])+'('+str(tag_counts[c][0])+')',variable=vardict['tag '+str(c)],bg="#ffcc00",anchor='w',justify="left")
+    #Initialize checkbuttons for each IntVar created
+    checkbox = tk.Checkbutton(window,
+                              text = str(epc_list[c])+'('+str(tag_counts[c][0])+')',
+                              variable=vardict['tag '+str(c)],
+                              bg="#ffcc00",
+                              anchor='w',
+                              justify="left")
     checkbox.pack(anchor='w')
     checkboxes.append(checkbox)
 
-tk.Button(window,text="Plot Selected",command=plot_selected,background = "black",fg='white').pack()
-tk.Button(window,text="Plot ALL",command=plot_all,background = "black",fg='White').pack()
+Scatter_Select = tk.IntVar()
+
+tk.Button(window,text="Plot Selected",
+          command=plot_selected,
+          background = "black",
+          fg='white').pack()
+tk.Button(window,text="Plot ALL",
+          command=plot_all,
+          background = "black",
+          fg='White').pack()
+
+#Force Window to Top
 window.attributes("-topmost", True)
 window.mainloop()
+### END GUI PROGRAMMING ###
+###########################
 
-#iterate through EPC list and if checkbox is "True" add EPC to new epc list
+#START PLOTTING LOGIC / Configuration
 
 #create x/y data sets (timestamp = x, rssi = y)
 x_value_set, y_value_set = generate_RSSI_vs_Time_dataset(read_events, selected_epc_list)      
@@ -182,12 +199,14 @@ j=0
 for count in selected_tag_counts:
     counts.append(selected_tag_counts[j][0])
     j+=1
+
+
 if plot_data ==1:
     ### CONFIGURE BAR GRAPH
     plt.figure(1)
     k=0
     for element in selected_epc_list:
-        plt.bar(selected_epc_list[k],counts[k],label = 'EPC:'+selected_epc_list[k]+ ' Read x'+ str(counts[k]))        
+        plt.bar(selected_epc_list[k],counts[k])        
         k+=1
 
 
@@ -203,6 +222,9 @@ if plot_data ==1:
     plt.figure(2)
     #plot each data set
     i=0
+
+    
+    #Create line for each entry in x/y value sets, round marker, legend displays EPC and total read count for that EPC
     for i in range(0,len(x_value_set)):
         plt.plot(x_value_set[i],y_value_set[i],marker ='.',label = "EPC:"+selected_epc_list[i]+" " + str(selected_tag_counts[i][0])+" Reads",alpha = 1)
 
@@ -215,4 +237,3 @@ if plot_data ==1:
     plt.legend(loc='best')
     plt.grid(axis= 'y')
     plt.show()
-
